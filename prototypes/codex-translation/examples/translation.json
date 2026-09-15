@@ -1,0 +1,13 @@
+{
+  "translation": "我已經學英文三個月了，但我還是覺得很難有自信地開口說英文。",
+  "vocabulary": [
+    { "term": "for three months", "meaning": "持續三個月，表示一段時間。" },
+    { "term": "still", "meaning": "仍然、還是，表示某種情況持續存在。" },
+    { "term": "confidently", "meaning": "有自信地；副詞，用來修飾說話或做事的方式。" }
+  ],
+  "grammar": [
+    "I've 是 I have 的縮寫；have been + V-ing 是現在完成進行式，表示從過去開始、持續到現在的動作。",
+    "find it + 形容詞 + to V 表示「覺得做某事很……」。it 是形式受詞，真正的內容是後面的 to speak confidently。",
+    "but 表示「但是」，連接語意轉折的兩個子句：雖然已經學了三個月，說英文時仍難以有自信。"
+  ]
+}

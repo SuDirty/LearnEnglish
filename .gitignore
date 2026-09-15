@@ -1,0 +1,9 @@
+node_modules/
+.local/
+artifacts/
+releases/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.pem

@@ -1,0 +1,22 @@
+{
+  "name": "subtitle-pocket",
+  "version": "0.9.2",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "mcp": "node bridge/server.mjs",
+    "mcp:token": "node bridge/token.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:live": "node test/live.mjs",
+    "test:layout": "node test/layout.browser.mjs",
+    "test:mcp:browser": "node test/mcp.browser.mjs",
+    "test:prototype": "npm --prefix prototypes/codex-translation test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "zod": "4.6.5"
+  }
+}

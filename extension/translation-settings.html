@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>翻譯設定 · 字幕口袋</title><link rel="stylesheet" href="ui.css"><style>
+main{max-width:700px!important}label{display:block;margin:20px 0 8px;font-weight:600}input,select{display:block;box-sizing:border-box;width:100%;padding:12px;margin-top:8px;border:1px solid #a6b9aa;border-radius:8px;background:white;font:inherit}button{margin:6px 8px 6px 0}.setting-note{font-size:14px;line-height:1.8;color:#506754}.setting-actions{display:flex;flex-wrap:wrap}#status{min-height:24px;white-space:pre-wrap}#usage,.setup{padding:18px;background:#e4eddf;border-radius:12px;line-height:1.9}#usage{white-space:pre-line}a{color:#276143}code{overflow-wrap:anywhere}button:disabled{opacity:.6}[hidden]{display:none!important}
+</style></head><body class="library"><main><p class="eyebrow">SUBTITLE POCKET</p><h1>字典與翻譯設定</h1><p>單字／片語優先查離線 ECDICT；整句優先用 Netflix 中文字幕。查不到時使用你選擇的翻譯服務。</p>
+<form id="settings">
+<label for="provider">翻譯服務<select id="provider"><option value="google">Google Cloud Translation</option><option value="mcp">Codex（本機 MCP）</option></select></label>
+<section id="mcp-settings" hidden>
+<div class="setup"><strong>使用已登入的 Codex 翻譯</strong><ol><li>在本專案資料夾開啟終端機，第一次執行 <code>npm install</code>。</li><li>確認已執行 <code>codex login</code>，接著執行 <code>npm run mcp</code>，保持終端機開啟。</li><li>另開終端機執行 <code>npm run mcp:token</code>，把權杖貼到下方。</li><li>按「儲存並測試連線」，允許 Chrome 存取本機服務。</li></ol></div>
+<label for="mcp-endpoint">本機服務網址<input id="mcp-endpoint" type="url" value="http://127.0.0.1:8765/mcp" spellcheck="false"></label>
+<label for="mcp-token">本機連線權杖<input id="mcp-token" type="password" autocomplete="off" spellcheck="false" placeholder="貼上本機服務產生的權杖"></label>
+<p id="mcp-state" class="setting-note"></p>
+<div class="setting-actions"><button id="test-mcp" type="button">儲存並測試連線</button><button id="clear-mcp-token" type="button">移除權杖</button></div>
+<p class="setting-note">選取的英文會經由本機服務送到 Codex 翻譯，使用現有 Codex 登入與用量額度。服務需保持執行；首次翻譯可能需要數十秒。連線失敗會顯示錯誤，不會自動切換到 Google。App Server 目前屬實驗性功能。</p>
+<p id="mcp-cache-state" class="setting-note"></p><button id="clear-mcp-cache" type="button">清除 Codex 翻譯快取</button>
+</section>
+<section id="google-settings">
+<label for="api-key">Google Cloud API 金鑰<input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="貼上你的 API 金鑰"></label><p id="key-state" class="setting-note"></p>
+<p class="setting-note">金鑰只保存在這個 Chrome 使用者設定檔，不會放入收藏匯出檔。請啟用 Cloud Translation API 與帳單，將金鑰的 API 限制設為 Cloud Translation API。</p>
+<label for="monthly-limit">本機每月送出字元上限<input id="monthly-limit" type="number" min="0" max="5000000" step="1" value="450000" required></label>
+<p class="setting-note">預設 450,000 字元；設為 0 可停止新的 Google 查詢，已有快取仍可使用。這是此套件的本機限制，不是 Google 帳戶的帳單上限。</p>
+<button id="clear-key" type="button">移除 Google 金鑰</button><div id="usage"></div><button id="clear-cache" type="button">清除 Google 翻譯快取</button>
+<p class="setting-note">用量依 UTC 月份重置，保守計入已送出的嘗試，包含失敗請求；快取、離線字典與中文字幕不計入。Codex 用量另依 Codex 帳號計算，不受此 Google 上限控制。</p>
+<p><a href="https://console.cloud.google.com/apis/library/translate.googleapis.com" target="_blank" rel="noreferrer">啟用 Cloud Translation API ↗</a> · <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">建立／限制 API 金鑰 ↗</a> · <a href="https://cloud.google.com/products/translate/pricing" target="_blank" rel="noreferrer">查看 Google 定價 ↗</a></p>
+</section>
+<button class="primary" type="submit">儲存設定</button>
+</form>
+<p id="status" role="status" aria-live="polite"></p>
+<p class="setting-note">線上翻譯只送出所選英文，不送原句、影片名稱或網址。收藏與翻譯快取保存在本機。Google 金鑰和 MCP 權杖不會放進收藏匯出檔。</p>
+<p class="setting-note">離線字典來源：<a href="https://github.com/skywind3000/ECDICT" target="_blank" rel="noreferrer">ECDICT</a>，中文以 OpenCC 轉為繁體。字典列出一般詞義，可能包含過時或不符劇情的解釋；可按「改用所選翻譯服務」比較。<a href="licenses/ECDICT.txt">授權</a></p>
+</main><script type="module" src="translation-settings.js"></script></body></html>

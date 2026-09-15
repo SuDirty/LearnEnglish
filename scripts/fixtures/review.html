@@ -1,0 +1,61 @@
+<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><title>複習模式測試</title>
+<style>body{margin:0;background:#090f13;color:#fff;font-family:system-ui}.watch-video{position:relative;width:100vw;height:100vh;background:linear-gradient(140deg,#243d44,#11171f)}video{width:100%;height:100%}.player-timedtext-text-container{position:absolute;bottom:18%;left:15%;font-size:28px}#results{position:fixed;top:15px;left:20px;max-width:55%;white-space:pre-wrap;z-index:2;font-size:12px}</style>
+<div class="watch-video"><video></video><div class="player-timedtext-text-container">Keep going.</div></div><pre id="results">Testing…</pre>
+<script>
+const errors=[]; window.addEventListener('error',e=>errors.push(e.message)); window.addEventListener('unhandledrejection',e=>errors.push(String(e.reason)));
+const saved={kind:'word',text:'going',context:'Keep going.',time:1,url:'https://www.netflix.com/watch/123'};
+const data={entries:[saved],reviewSettings:{enabled:true,hideChinese:true,hideEnglish:true,pause:true,kinds:['word','phrase','sentence']}};
+const listeners=[];
+window.chrome={runtime:{id:'fixture',sendMessage:async()=>({ok:true,translation:'繼續',provider:'ECDICT'})},storage:{local:{get:async defaults=>typeof defaults==='string'?{[defaults]:data[defaults]}:{...defaults,...data},set:async values=>{const changes={};for(const [key,value] of Object.entries(values)){changes[key]={oldValue:data[key],newValue:value};data[key]=value;}listeners.forEach(fn=>fn(changes,'local'));}},onChanged:{addListener:fn=>listeners.push(fn)}}};
+const video=document.querySelector('video');let time=1.5,paused=false,pauseCount=0,seeking=false;
+Object.defineProperties(video,{currentTime:{get:()=>time},paused:{get:()=>paused},seeking:{get:()=>seeking}});
+video.pause=()=>{paused=true;pauseCount++;};video.play=async()=>{paused=false;};
+function track(language,cues){const native=video.addTextTrack('subtitles',language,language);native.mode='hidden';cues.forEach(([start,end,text])=>native.addCue(new VTTCue(start,end,text)));}
+track('en',[[1.4,3,'Keep going.'],[3,5,'You can do it.'],[7,9,'Keep going.']]);
+track('zh-Hant',[[1.4,3,'繼續努力。'],[3,5,'你做得到。'],[7,9,'繼續努力。']]);
+</script>
+<script src="/extension/layout.js"></script><script src="/extension/transcript.js"></script><script src="/extension/review.js"></script><script src="/extension/transcript-ui.js"></script><script src="/extension/content.js"></script>
+<script>
+(async()=>{
+const wait=()=>new Promise(r=>setTimeout(r,320));const passed=[];
+function check(value,label){if(!value)throw Error(label);passed.push(label);}
+await wait();
+const root=document.querySelector('#subtitle-pocket-host').shadowRoot,$=id=>root.getElementById(id),rows=()=>[...root.querySelectorAll('.cue')];
+if ($('panel-info-open')) $('panel-info-open').click();
+$('review-settings').open=true;
+check($('review-enabled').getBoundingClientRect().width > 0, 'review settings visible and reachable');
+if ($('panel-info-close')) $('panel-info-close').click();
+check(rows().length===3,'loads bilingual transcript');
+check(rows()[0].querySelector('.cue-text').hidden&&rows()[0].querySelector('.cue-zh').hidden,'masks both languages on saved sentence');
+check(!rows()[2].querySelector('.cue-text').hidden,'does not mask another occurrence');
+check(!$('words').textContent.includes('Keep going.'),'video overlay hides English answer');
+check(paused&&pauseCount===1,'pauses target dialogue');
+await video.play();await wait();check(!paused&&pauseCount===1,'resume does not pause same sentence again');
+rows()[0].querySelector('.cue-review').click();await wait();
+check(!rows()[0].querySelector('.cue-text').hidden&&$('words').textContent.includes('Keep going.'),'reveal updates transcript and video');
+rows()[0].querySelector('.cue-review').click();await wait();
+check(rows()[0].querySelector('.cue-text').hidden,'re-mask answer');
+$('review-english').click();await wait();
+check(!rows()[0].querySelector('.cue-text').hidden&&rows()[0].querySelector('.cue-zh').hidden,'language masks independently selectable');
+document.querySelector('.player-timedtext-text-container').textContent='繼續努力。';await wait();
+check($('words').textContent.includes('中文字幕已遮蔽')&&document.querySelector('.player-timedtext-text-container').style.opacity==='0','masks native Chinese captions');
+root.querySelector('#review-kinds input[value="word"]').click();await wait();
+check(!rows()[0].querySelector('.cue-zh').hidden&&document.querySelector('.player-timedtext-text-container').style.opacity==='','type filter restores native Chinese');
+root.querySelector('#review-kinds input[value="word"]').click();$('review-english').click();await wait();
+await chrome.storage.local.set({entries:[]});await wait();check(!rows()[0].querySelector('.cue-text').hidden,'deleting saved entry removes masking');
+await chrome.storage.local.set({entries:[{...saved,kind:'sentence',context:'Keep going.\nYou can do it.'}]});await wait();
+check(rows()[0].querySelector('.cue-text').hidden&&rows()[1].querySelector('.cue-text').hidden,'legacy paragraph masks both rows');
+video.dispatchEvent(new Event('seeking'));await video.play();await wait();check(paused,'seeking back rearms pause');
+$('review-enabled').click();await video.play();await wait();
+check(!rows()[0].querySelector('.cue-text').hidden&&!rows()[0].querySelector('.cue-zh').hidden&&!paused,'mode off restores text and playback');
+$('review-enabled').click();await wait();
+$('transcript-close').click();check($('transcript').hidden,'review works with collapsed panel');$('transcript-toggle').click();
+await chrome.storage.local.set({enabled:false});await video.play();await wait();check($('side-region').hidden&&!paused&&document.querySelector('.player-timedtext-text-container').style.opacity==='','extension off restores subtitles');
+await chrome.storage.local.set({enabled:true});await wait();
+history.pushState({},'','/watch/999');await wait();check(!root.querySelector('.review-target'),'navigation clears previous episode targets');
+history.pushState({},'','/watch/123');await wait();$('review-settings').open=true;
+if ($('panel-info-open')) $('panel-info-open').click();
+check(errors.length===0,'no browser runtime errors: '+errors.join(';'));
+document.querySelector('#results').textContent='PASS '+passed.length+' browser checks\n'+passed.join('\n');document.body.dataset.result='pass';
+})().catch(e=>{document.querySelector('#results').textContent='FAIL '+e.stack+'\n'+errors.join('\n');document.body.dataset.result='fail';});
+</script></html>
