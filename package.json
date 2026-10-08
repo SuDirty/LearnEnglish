@@ -1,6 +1,6 @@
 {
   "name": "subtitle-pocket",
-  "version": "0.9.2",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -11,9 +11,20 @@
     "mcp:token": "node bridge/token.mjs",
     "test": "node --test test/*.test.mjs",
     "test:live": "node test/live.mjs",
+    "test:vocabulary:browser": "node test/vocabulary.browser.mjs",
+    "test:speech:browser": "node test/speech.browser.mjs",
     "test:layout": "node test/layout.browser.mjs",
+    "test:shadowing:browser": "node test/shadowing.browser.mjs",
     "test:mcp:browser": "node test/mcp.browser.mjs",
-    "test:prototype": "npm --prefix prototypes/codex-translation test"
+    "test:prototype": "npm --prefix prototypes/codex-translation test",
+    "ai:install": "npm install --prefix .local/ai-tools --no-audit --no-fund --save-exact @github/copilot@1.0.83",
+    "ai:login:copilot": "node scripts/cloud-login.mjs copilot",
+    "mcp:copilot": "node bridge/cloud-server.mjs copilot",
+    "ai:login:antigravity": "node scripts/cloud-login.mjs antigravity",
+    "mcp:antigravity": "node bridge/cloud-server.mjs antigravity",
+    "ai:install:antigravity": "node scripts/install-antigravity.mjs",
+    "package:release": "node scripts/package-release.mjs",
+    "package:store": "node scripts/package-store.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

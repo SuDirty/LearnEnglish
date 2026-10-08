@@ -1,0 +1,11 @@
+import { spawn } from 'node:child_process';
+import { cliBin, prepareCloud } from '../providers/shared/cloud-cli.mjs';
+import { agyBin, prepareAntigravity } from '../providers/antigravity/runtime.mjs';
+const provider = process.argv[2];
+if (!['antigravity', 'copilot'].includes(provider)) throw new Error('請使用 antigravity 或 copilot；Gemini CLI 已停止個人帳號登入。');
+const options = provider === 'antigravity' ? await prepareAntigravity() : await prepareCloud(provider);
+if (process.env.TERM) options.env.TERM = process.env.TERM;
+console.log(provider === 'antigravity' ? '請使用 Google 帳號登入；已停用額外 AI Credits 與 API key。' : '請使用啟用 Copilot Free 的 GitHub 帳號登入。');
+const child = spawn(provider === 'antigravity' ? agyBin : cliBin(provider), provider === 'antigravity' ? [] : ['login'], { ...options, stdio: 'inherit', shell: false });
+child.once('error', () => { console.error('請先依 docs/cloud-ai.md 安裝官方 CLI。'); process.exitCode = 1; });
+child.once('exit', code => { process.exitCode = code ?? 1; });

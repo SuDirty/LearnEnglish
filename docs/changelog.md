@@ -1,5 +1,23 @@
 # 版本紀錄
 
+## v0.10.0：系統單字朗讀、跟讀與 AI 評分
+
+- 翻譯卡片與收藏庫單字提供正常、0.7 倍慢速及停止朗讀，無需等待翻譯。
+- 使用本機英文系統語音，優先美式英文；新增 `tts` 權限，不使用雲端語音或 AI 額度。
+- 切換單字、關閉卡片時停止該頁朗讀；其他頁面不會誤停目前播放。朗讀前暫停影片及跟讀練習，結束後由使用者繼續播放。
+- 更新後重新載入擴充功能、Netflix 與收藏庫；本功能無需重啟 MCP。
+- 逐字稿提供逐句循環跟讀與聽後複誦，可設定語速、輪數、休息時間與字幕遮蔽；結束練習時還原原本播放速度。
+
+### 單字翻譯同步評分與標籤
+
+- MCP 單字翻譯以同一次 AI 請求取得譯文、常用度、實用性、繁中理由與多重標籤，翻譯卡片立即顯示，收藏時一併保存。
+- 支援 Codex、Antigravity、GitHub Copilot；不同原句的單字用法分開快取。離線字典、Google、片語與句子翻譯維持原流程。
+- 收藏庫支援每批 10 字分析未評分單字、失敗後接續、標籤篩選、學習優先順序排序及含評分的 CSV／JSON 匯出。
+- 收藏資料的評分會驗證原文、譯文與上下文；重複收藏可補上評分，保留原收藏 ID。
+- 發行提供使用既有根目錄簽章金鑰的 CRX，以及包含擴充功能、MCP、供應商與文件的完整 ZIP；封裝不包含金鑰、權杖或本機帳號資料。
+
+**更新：**保留原套件安裝；未封裝安裝請覆蓋原路徑的 `extension/` 並按重新載入。另更新 MCP 程式並重啟目前使用的服務，再重新整理 Netflix 與收藏庫。只更新 CRX 而未重啟 MCP 時，同步評分會提示更新服務。
+
 ## v0.9.2：修正找不到 Codex 執行檔
 
 修正「spawn codex ENOENT」：服務會依序使用 `CODEX_BIN`、終端機 PATH，以及 macOS 的 Applications 中 Codex／ChatGPT app 內建執行檔。亦會檢查使用者的 Applications 與 Homebrew 常用路徑。明確設定但無效的 `CODEX_BIN` 會顯示修正提示，不會改用其他版本。
@@ -18,7 +36,7 @@ CODEX_BIN="/Applications/ChatGPT.app/Contents/Resources/codex" npm run mcp
 
 此版包含 v0.9.0 的複習模式與版面功能，以及完整的 MCP／Codex 翻譯整合。修正 Chromium 中 MCP 請求的 `fetch` 綁定問題，並包含窄面板標題換行與翻譯卡片尺寸修正。
 
-目前原始碼版本為 **0.9.2**，版本以 `extension/manifest.json` 與根目錄 `package.json` 為準。`releases/` 保存既有 ZIP；本次整理未產生新的發行套件。
+目前原始碼版本為 **0.10.0**，版本以 `extension/manifest.json` 與根目錄 `package.json` 為準。發行套件可透過 `npm run package:release` 重建。
 
 **更新既有安裝：**將新版本 `extension` 的內容覆蓋到 Chrome 原本載入的資料夾，接著在 `chrome://extensions` 按「重新載入」並重新整理 Netflix。若原本就載入這個開發資料夾，直接重新載入即可。保留原本套件安裝與路徑，避免另外建立一個不同的擴充功能；不需移除舊套件。
 
@@ -45,4 +63,3 @@ node scripts/browser-smoke.mjs
 ```
 
 瀏覽器測試預設使用 macOS 的 Google Chrome，可透過 `CHROME_BIN` 指定執行檔。使用獨立暫存設定檔、本機頁面與模擬播放狀態，載入實際的字幕、版面、內容及複習程式，驗證中英遮蔽、影片字幕還原、分類、答案切換、段落、暫停與繼續、收藏刪除、停用及換集。截圖位於 `artifacts/review.png`。本次未登入 Netflix 實片驗證。
-

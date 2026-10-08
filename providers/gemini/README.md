@@ -1,5 +1,3 @@
-# Gemini 接入預留
+# Gemini CLI 個人方案已停用
 
-狀態：尚未實作，設定介面目前不提供此選項。
-
-未來在此新增 `index.mjs`，實作共用的 `createBackend()` 介面；細節見 [供應商開發說明](../README.md)。
+2026-09-15 實際 Google OAuth 登入回報此 CLI 不再支援個人方案。依 [Google 公告](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals)，已改用 `providers/antigravity/`；不提供 Gemini CLI 免費選項，也不改走付費 API。

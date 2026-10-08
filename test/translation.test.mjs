@@ -76,3 +76,69 @@ test('Codex source survives normalization for saved entries and CSV export', () 
   assert.equal(entry.translationSource, 'Codex (MCP)');
   assert.match(toCsv([entry]), /Codex \(MCP\)/);
 });
+
+test('cloud provider selection isolates models at the same endpoint and never falls back to Google', async t => {
+  let identity = 'antigravity:model-a', calls = 0;
+  const server = await startServer({ port: 0, token: 'c'.repeat(64), backend: {
+    status: async () => ({ connected: true, provider: 'Antigravity (MCP)', providerId: 'antigravity', cacheIdentity: identity }),
+    translate: async () => { calls++; return { translation: identity, provider: 'Antigravity (MCP)', cacheIdentity: identity }; },
+  } });
+  t.after(() => server.close());
+  storage = {}; googleCalls = 0;
+  await saveTranslationSettings({ provider: 'antigravity', mcpEndpoint: server.endpoint, mcpToken: 'c'.repeat(64) });
+  assert.equal((await translate('Model check', 'sentence')).translation, 'antigravity:model-a');
+  assert.equal((await translate('Model check', 'sentence')).cached, true);
+  identity = 'antigravity:model-b';
+  assert.equal((await translate('Model check', 'sentence')).translation, 'antigravity:model-b');
+  assert.equal(calls, 2);
+  await saveTranslationSettings({ provider: 'copilot' });
+  await assert.rejects(translate('Model check', 'sentence'), /不符/);
+  assert.equal(googleCalls, 0);
+});
+
+test('cloud AI sources survive saved entry normalization and CSV export', () => {
+  for (const source of ['Antigravity (MCP)', 'GitHub Copilot (MCP)']) {
+    const entry = makeEntry({ text: 'Hello', translation: '你好', translationSource: source });
+    assert.equal(entry.translationSource, source);
+    assert.ok(toCsv([entry]).includes(source));
+  }
+});
+
+test('MCP word lookup translates and scores in one request, caches by context, and saves portable scores', async t => {
+  const { currentScore } = await import('../extension/vocabulary.js');
+  let wordCalls = 0, plainCalls = 0;
+  const contexts = [];
+  const server = await startServer({ port: 0, token: 'd'.repeat(64), backend: {
+    status: async () => ({ connected: true, cacheIdentity: 'inline-model' }),
+    translate: async () => { plainCalls++; return { translation: '普通翻譯' }; },
+    translateWord: async (text, context) => { wordCalls++; contexts.push(context); return { translation: '銀行', provider: 'Codex (MCP)', model: 'inline-model',
+      learningScore: { frequency: 85, usefulness: 90, tags: ['日常', '商用'], reason: '日常理財常用。' } }; },
+  } });
+  t.after(() => server.close());
+  storage = {}; googleCalls = 0;
+  await saveTranslationSettings({ provider: 'mcp', mcpEndpoint: server.endpoint, mcpToken: 'd'.repeat(64) });
+  assert.equal((await translate('bank', 'word', false, 'Visit the bank.')).provider, 'ECDICT');
+  assert.equal(wordCalls, 0);
+  const [a, b] = await Promise.all([translate('bank', 'word', true, 'Visit the bank.'), translate('bank', 'word', true, 'Visit the bank.')]);
+  assert.deepEqual(a, b); assert.equal(wordCalls, 1); assert.equal(plainCalls, 0);
+  assert.equal(a.learningScore.score, 88);
+  const saved = makeEntry({ text: 'bank', kind: 'word', context: 'Visit the bank.', translation: a.translation, translationSource: a.provider, learningScore: a.learningScore });
+  assert.equal(currentScore(saved).score, 88);
+  assert.equal(currentScore(makeEntry({ ...saved, context: 'Changed context', learningScore: a.learningScore })), null);
+  assert.equal(currentScore(makeEntry({ ...saved, translation: '變更譯文', learningScore: a.learningScore })), null);
+  assert.equal((await translate('bank', 'word', true, 'Visit the bank.')).cached, true);
+  await translate('bank', 'word', true, 'Sit on the river bank.');
+  assert.equal(wordCalls, 2); assert.deepEqual(contexts, ['Visit the bank.', 'Sit on the river bank.']);
+  await translate('bank', 'sentence', true);
+  assert.equal(plainCalls, 1, 'plain translation cache stays separate');
+  assert.equal(googleCalls, 0);
+});
+
+test('old MCP backends clearly require restart for inline scores', async t => {
+  const server = await startServer({ port: 0, token: 'e'.repeat(64), backend: {
+    status: async () => ({ connected: true }), translate: async () => ({ translation: '你好' }),
+  } });
+  t.after(() => server.close()); storage = {};
+  await saveTranslationSettings({ provider: 'mcp', mcpEndpoint: server.endpoint, mcpToken: 'e'.repeat(64) });
+  await assert.rejects(translate('hello', 'word', true), /重新啟動 MCP/);
+});

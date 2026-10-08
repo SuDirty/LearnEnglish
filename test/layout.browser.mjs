@@ -9,6 +9,7 @@ const project = fileURLToPath(new URL('../', import.meta.url));
 const extension = resolve(project, 'extension');
 const profile = await mkdtemp(join(tmpdir(), 'subtitle-layout-'));
 const browser = await chromium.launchPersistentContext(profile, {
+  executablePath: process.env.CHROME_BIN,
   channel: 'chromium', headless: true, viewport: { width: 1440, height: 900 },
   args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`],
 });

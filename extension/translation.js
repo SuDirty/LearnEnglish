@@ -1,3 +1,4 @@
+import { RUBRIC_VERSION, inlineContext, bindInlineScore } from './vocabulary.js';
 import { validateText } from './core.js';
 import { lookupDictionary } from './dictionary.js';
 import { McpTranslationClient, DEFAULT_MCP_ENDPOINT, validateMcpEndpoint } from './mcp.js';
@@ -16,7 +17,7 @@ export async function saveTranslationSettings(message) {
   return serial(async () => {
     const value = {};
     if (message.provider !== undefined) {
-      if (!['google', 'mcp'].includes(message.provider)) throw new Error('不支援的翻譯來源。');
+      if (!['google', 'mcp', 'antigravity', 'copilot'].includes(message.provider)) throw new Error('不支援的翻譯來源。');
       value.translationProvider = message.provider;
     }
     if (message.mcpEndpoint !== undefined) value.mcpEndpoint = validateMcpEndpoint(message.mcpEndpoint);
@@ -86,35 +87,47 @@ async function googleTranslate(text) {
 }
 export async function testMcpConnection() {
   await queue;
-  const data = await chrome.storage.local.get(['mcpEndpoint', 'mcpToken']);
-  return new McpTranslationClient({ endpoint: data.mcpEndpoint, token: data.mcpToken }).check();
+  const data = await chrome.storage.local.get(['mcpEndpoint', 'mcpToken', 'translationProvider']);
+  return new McpTranslationClient({ endpoint: data.mcpEndpoint, token: data.mcpToken, expectedProvider: expectedProvider(data.translationProvider) }).check();
 }
-async function mcpTranslate(text) {
-  const settings = await chrome.storage.local.get(['mcpEndpoint', 'mcpToken', 'mcpCache']);
+const expectedProvider = provider => ({ mcp: 'codex', antigravity: 'antigravity', copilot: 'copilot' })[provider];
+async function mcpTranslate(text, kind, sourceContext) {
+  const context = kind === 'word' ? inlineContext(sourceContext) : '';
+  const taskKey = kind === 'word' ? ['word-score', RUBRIC_VERSION, context] : [];
+  const settings = await chrome.storage.local.get(['mcpEndpoint', 'mcpToken', 'translationProvider']);
   const endpoint = settings.mcpEndpoint || DEFAULT_MCP_ENDPOINT;
-  const key = JSON.stringify([endpoint, 'en', 'zh-TW', text]);
-  const cached = settings.mcpCache?.[key];
-  if (typeof cached === 'string' && cached) return { translation: cached, provider: 'Codex (MCP)', cached: true };
-  const pendingKey = JSON.stringify(['mcp', key, settings.mcpToken]);
+  const pendingKey = JSON.stringify(['mcp', endpoint, settings.translationProvider, text, taskKey, settings.mcpToken]);
   if (pending.has(pendingKey)) return pending.get(pendingKey);
   const request = (async () => {
-    const result = await new McpTranslationClient({ endpoint, token: settings.mcpToken }).translate(text, {
-      // Short extension API calls during an active job reset the MV3 idle timer.
+    const client = new McpTranslationClient({ endpoint, token: settings.mcpToken, expectedProvider: expectedProvider(settings.translationProvider) });
+    const health = await client.check();
+    // Resolve provider/model identity before reading cache: a port can be reused by another AI.
+    const identity = health.cacheIdentity || health.provider || 'Codex (MCP)';
+    const keyFor = id => JSON.stringify([endpoint, id, 'en', 'zh-TW', text, ...taskKey]);
+    const key = keyFor(identity);
+    const { mcpCache = {} } = await chrome.storage.local.get('mcpCache');
+    const cached = mcpCache[key];
+    if (cached?.translation && typeof cached.translation === 'string' && cached.provider
+      && (kind !== 'word' || bindInlineScore({ id: 'cache', kind, text, context, translation: cached.translation, translationSource: cached.provider }, cached.learningScore))) return { ...cached, cached: true };
+    const result = await client.translate(text, { kind, context,
       onPoll: () => chrome.storage.local.get('translationProvider'),
     });
     await serial(async () => {
-      const { mcpCache = {}, mcpEndpoint, mcpToken } = await chrome.storage.local.get(['mcpCache', 'mcpEndpoint', 'mcpToken']);
-      if ((mcpEndpoint || DEFAULT_MCP_ENDPOINT) !== endpoint || mcpToken !== settings.mcpToken) return;
-      mcpCache[key] = result.translation;
-      while (Object.keys(mcpCache).length > 300) delete mcpCache[Object.keys(mcpCache)[0]];
-      await chrome.storage.local.set({ mcpCache });
+      const current = await chrome.storage.local.get(['mcpCache', 'mcpEndpoint', 'mcpToken', 'translationProvider']);
+      if ((current.mcpEndpoint || DEFAULT_MCP_ENDPOINT) !== endpoint || current.mcpToken !== settings.mcpToken
+        || current.translationProvider !== settings.translationProvider) return;
+      const cache = current.mcpCache || {};
+      cache[keyFor(result.cacheIdentity || identity)] = result;
+      while (Object.keys(cache).length > 300) delete cache[Object.keys(cache)[0]];
+      await chrome.storage.local.set({ mcpCache: cache });
     });
     return result;
   })();
   pending.set(pendingKey, request);
   try { return await request; } finally { pending.delete(pendingKey); }
 }
-export async function translate(value, kind, forceOnline = false) {
+
+export async function translate(value, kind, forceOnline = false, context = '') {
   const text = validateText(value);
   if (!forceOnline && ['word', 'phrase'].includes(kind)) {
     const entry = await lookupDictionary(text);
@@ -122,5 +135,7 @@ export async function translate(value, kind, forceOnline = false) {
   }
   await queue;
   const { translationProvider = 'google' } = await chrome.storage.local.get('translationProvider');
-  return translationProvider === 'mcp' ? mcpTranslate(text) : googleTranslate(text);
+  if (translationProvider === 'google') return googleTranslate(text);
+  if (expectedProvider(translationProvider)) return mcpTranslate(text, kind, context);
+  throw new Error('不支援的翻譯來源，請重新儲存翻譯設定。');
 }

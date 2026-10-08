@@ -16,10 +16,16 @@ const manifest = JSON.parse(await readFile(join(extension, 'manifest.json'), 'ut
 manifest.host_permissions.push('http://127.0.0.1/*');
 await writeFile(join(extension, 'manifest.json'), JSON.stringify(manifest));
 const token = randomBytes(32).toString('hex');
-let calls = 0, googleCalls = 0;
+const provider = process.env.TEST_AI_PROVIDER || 'mcp';
+const label = { mcp: 'Codex (MCP)', antigravity: 'Antigravity (MCP)', copilot: 'GitHub Copilot (MCP)' }[provider];
+assert.ok(label, 'supported browser test provider');
+let calls = 0, googleCalls = 0, wordCalls = 0;
 const server = await startServer({ port: 0, token, backend: {
-  status: async () => ({ connected: true, authType: 'chatgpt' }),
-  translate: async text => { calls++; if (calls === 1) await delay(35_000); return { translation: '持續每天學習。' }; },
+  status: async () => ({ connected: true, authType: provider === 'mcp' ? 'chatgpt' : 'oauth', providerId: provider === 'mcp' ? 'codex' : provider, provider: label }),
+  translateWord: async (text, context) => { wordCalls++; assert.equal(text, 'learning'); assert.equal(context, 'Keep learning every day.'); return {
+    translation: '學習', provider: label, model: 'test-model', learningScore: { frequency: 95, usefulness: 90, tags: ['日常', '學術'], reason: '學習與工作都常見。' },
+  }; },
+  translate: async text => { calls++; if (calls === 1) await delay(provider === 'mcp' ? 35_000 : 500); return { translation: '持續每天學習。', provider: label }; },
 } });
 let context;
 try {
@@ -37,7 +43,7 @@ try {
   settings.on('pageerror', error => errors.push(error.message));
   await settings.goto(`chrome-extension://${extensionId}/translation-settings.html`);
   await settings.waitForFunction(() => document.querySelector('#mcp-state').textContent.length > 0);
-  await settings.selectOption('#provider', 'mcp');
+  await settings.selectOption('#provider', provider);
   await settings.fill('#mcp-endpoint', server.endpoint);
   await settings.fill('#mcp-token', token);
   await settings.click('#test-mcp');
@@ -48,7 +54,7 @@ try {
   }
   assert.equal(await settings.inputValue('#mcp-token'), '');
   await mkdir(new URL('../artifacts/', import.meta.url), { recursive: true });
-  await settings.screenshot({ path: new URL('../artifacts/mcp-settings.png', import.meta.url).pathname, fullPage: true });
+  await settings.screenshot({ path: new URL(`../artifacts/${provider}-settings.png`, import.meta.url).pathname, fullPage: true });
   await settings.setViewportSize({ width: 390, height: 844 });
   assert.equal(await settings.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await settings.setViewportSize({ width: 1440, height: 1000 });
@@ -62,18 +68,43 @@ try {
   await page.goto('https://www.netflix.com/watch/123');
   await page.locator('#sentence').click();
   await page.waitForFunction(() => document.querySelector('#subtitle-pocket-host')?.shadowRoot.querySelector('#translation').textContent === '持續每天學習。', null, { timeout: 60_000 });
-  assert.match(await page.locator('#note').textContent(), /Codex \(MCP\)/);
+  assert.ok((await page.locator('#note').textContent()).includes(label));
   await page.locator('#save').click();
   await page.waitForFunction(() => document.querySelector('#subtitle-pocket-host').shadowRoot.querySelector('#save').textContent.includes('已收藏'));
   const saved = await settings.evaluate(async () => (await chrome.storage.local.get('entries')).entries);
-  assert.equal(saved[0].translationSource, 'Codex (MCP)');
-  await page.screenshot({ path: new URL('../artifacts/mcp-translation.png', import.meta.url).pathname });
+  assert.equal(saved[0].translationSource, label);
+  await page.screenshot({ path: new URL(`../artifacts/${provider}-translation.png`, import.meta.url).pathname });
   await page.locator('#sentence').click();
   await page.waitForFunction(() => document.querySelector('#subtitle-pocket-host').shadowRoot.querySelector('#note').textContent.includes('本機快取'));
   assert.equal(calls, 1);
   assert.equal(googleCalls, 0);
+  await page.locator('#words button').filter({ hasText: /^learning$/ }).click();
+  await page.waitForFunction(() => document.querySelector('#subtitle-pocket-host').shadowRoot.querySelector('#online-translate').hidden === false);
+  await page.locator('#online-translate').click();
+  await page.waitForFunction(() => document.querySelector('#subtitle-pocket-host').shadowRoot.querySelector('#learning-score').hidden === false);
+  assert.match(await page.locator('#learning-score-summary').textContent(), /93 \/ 100/);
+  assert.equal(await page.locator('#learning-score-tags').textContent(), '日常 · 學術');
+  assert.equal(wordCalls, 1);
+  await page.locator('#save').click();
+  await page.waitForFunction(() => document.querySelector('#subtitle-pocket-host').shadowRoot.querySelector('#save').textContent.includes('已收藏'));
+  const word = await settings.evaluate(async () => (await chrome.storage.local.get('entries')).entries.find(entry => entry.kind === 'word'));
+  assert.equal(word.learningScore.score, 93); assert.deepEqual(word.learningScore.tags, ['日常', '學術']);
+  await page.locator('#words button').filter({ hasText: /^learning$/ }).click();
+  await page.waitForFunction(() => document.querySelector('#subtitle-pocket-host').shadowRoot.querySelector('#online-translate').hidden === false);
+  assert.equal(await page.locator('#learning-score').isHidden(), true, 'dictionary lookup clears earlier score');
+  await page.locator('#online-translate').click();
+  await page.waitForFunction(() => document.querySelector('#subtitle-pocket-host').shadowRoot.querySelector('#note').textContent.includes('本機快取'));
+  assert.equal(wordCalls, 1);
+  await page.locator('#save').click();
+  await page.waitForFunction(() => document.querySelector('#subtitle-pocket-host').shadowRoot.querySelector('#feedback').textContent.includes('已更新'));
+  assert.equal((await settings.evaluate(async () => (await chrome.storage.local.get('entries')).entries)).length, 2);
+  await page.screenshot({ path: new URL(`../artifacts/${provider}-inline-score.png`, import.meta.url).pathname });
+  await settings.goto(`chrome-extension://${extensionId}/library.html`);
+  await settings.waitForFunction(() => document.querySelectorAll('.word-score').length === 1);
+  assert.match(await settings.locator('#analysis-summary').textContent(), /已評分 1/);
+  assert.equal(await settings.locator('#analyze').isDisabled(), true);
   assert.deepEqual(errors, []);
-  console.log('PASS: real extension settings, MCP health, 35-second translation, source display, saved source, cache, mobile settings width, no Google fallback.');
+  console.log(`PASS: ${label}: real extension settings, MCP health, translation, source display, saved source, inline word score/tags in one request, duplicate save, library persistence, cache, mobile settings width, no Google fallback.`);
 } finally {
   await context?.close();
   await server.close();

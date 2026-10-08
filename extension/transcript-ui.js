@@ -141,7 +141,7 @@
     new ResizeObserver(syncCardSize).observe(region);
     new MutationObserver(() => { if (card.hidden) endCardResize(true); syncCardSize(); }).observe(card, { attributes: true, attributeFilter: ['hidden'] });
     const selectionTools = document.createElement('div'); selectionTools.id = 'selection-tools'; selectionTools.hidden = true;
-    selectionTools.innerHTML = '<p id="selection-preview"></p><button id="selection-lookup">翻譯並準備收藏</button> <button id="selection-cancel">取消選取</button>';
+    selectionTools.innerHTML = '<p id="selection-preview"></p><button id="selection-lookup">翻譯並準備收藏</button> <button id="selection-shadow">練習這段</button> <button id="selection-cancel">取消選取</button>';
     panel.querySelector('footer').prepend(selectionTools);
     let selectionDraft = null, gesture = null, suppressClick = false, renderPending = false;
     const textSelection = () => root.getSelection ? root.getSelection() : document.getSelection();
@@ -172,7 +172,7 @@
       // When all words are selected, retain the original sentence's closing punctuation.
       if (withoutEdgePunctuation(text) === withoutEdgePunctuation(context)) text = context;
       const kind = normalize(text) === normalize(context) ? 'sentence' : /^[A-Za-z]+(?:['’\-][A-Za-z]+)*$/.test(text) ? 'word' : 'phrase';
-      return { text, context, kind, metadata: { time: selectedCues[0].start, cueEnd: selectedCues.at(-1).end, url: location.origin + path } };
+      return { text, context, kind, lastStart: selectedCues.at(-1).start, metadata: { time: selectedCues[0].start, cueEnd: selectedCues.at(-1).end, url: location.origin + path } };
     }
     list.addEventListener('pointerdown', event => {
       suppressClick = false;
@@ -185,6 +185,7 @@
     root.addEventListener('pointermove', event => {
       if (!gesture || !(event.buttons & 1)) return;
       if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 4) {
+        if (!gesture.moved) void shadow.pause('選取文字中，完成後按繼續。');
         gesture.moved = true; manualScroll();
         const word = event.target.closest('.cue-word');
         if (gesture.word && word) {
@@ -216,6 +217,12 @@
       if (draft) lookup(draft.text, draft.kind, draft.context, draft.metadata);
     };
     $('selection-cancel').onclick = () => clearSelection();
+    $('selection-shadow').onpointerdown = event => event.preventDefault();
+    $('selection-shadow').onclick = () => {
+      const draft = selectionDraft;
+      if (draft) shadow.prepare(draft.metadata.time, draft.lastStart);
+      clearSelection();
+    };
     root.addEventListener('keydown', event => { if (event.key === 'Escape') clearSelection(); });
     let listHeight = list.clientHeight;
     let path = location.pathname, tracks = [], selectedTrack = null, history = [], cues = [], rows = [];
@@ -226,6 +233,12 @@
     let reviewSettings = review.settings(), entries = [], reviewTargets = new Set(), revealed = new Set();
     const pauseGate = review.createPauseGate();
     let reviewVideo = null;
+    const shadow = globalThis.SubtitlePocketShadowing.createUI(root, {
+      getCues: () => cues, precise: () => !!selectedTrack,
+      changed: () => { clearSelection(false); pauseGate.reset(); applyReview(); },
+      selected: cue => { closeTranslation(); collapsed = false; show(); following = true; $('resume-follow').hidden = true; const index = cues.findIndex(c => c.start === cue.start); if (index >= 0) centerRow(rows[index]); },
+      translate: cue => alignTranslation(cue, selectedChinese),
+    });
     function resetReviewPlayback() { pauseGate.reset(); revealed.clear(); applyReview(); }
     function syncReviewControls() {
       $('review-enabled').checked = reviewSettings.enabled;
@@ -241,12 +254,13 @@
       applyReview();
     }
     function applyReview() {
+      const shadowMask = shadow.mask();
       rows.forEach((row, i) => {
-        const target = reviewSettings.enabled && reviewTargets.has(i);
+        const target = !shadowMask && reviewSettings.enabled && reviewTargets.has(i);
         const answer = revealed.has(review.key(cues[i]));
         row.classList.toggle('review-target', target);
-        const en = target && !answer && reviewSettings.hideEnglish;
-        const zh = target && !answer && reviewSettings.hideChinese;
+        const en = shadowMask ? shadowMask.hideEnglish : target && !answer && reviewSettings.hideEnglish;
+        const zh = shadowMask ? shadowMask.hideChinese : target && !answer && reviewSettings.hideChinese;
         row.querySelector('.cue-text').hidden = en;
         const chinese = row.querySelector('.cue-zh'); if (chinese) chinese.hidden = zh;
         row.querySelector('.review-mask-en').hidden = !en;
@@ -286,7 +300,11 @@
     };
     function manualScroll() { following = false; expectedScroll = null; $('resume-follow').hidden = false; }
     function followCurrent() {
-      const row = rows[active[0]];
+      const practice = shadow.current();
+      const index = practice ? cues.findIndex(c => practice.start >= c.start && practice.start < c.end) : active[0];
+      centerRow(rows[index]);
+    }
+    function centerRow(row) {
       if (!row || !following || collapsed) return;
       // Use the visible list viewport after the card and header have taken their space.
       const rowTop = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
@@ -326,6 +344,7 @@
       followCurrent();
     }
     function jump(cue) {
+      void shadow.pause('影片位置已變更，按繼續從本輪開頭重播。', true);
       clearSelection();
       closeTranslation(); resetReviewPlayback();
       seekId = crypto.randomUUID(); clearTimeout(seekTimer);
@@ -372,6 +391,8 @@
         const save = document.createElement('button'); save.className = 'cue-save'; save.textContent = '☆'; save.title = '收藏整句'; save.setAttribute('aria-label', '收藏整句：' + cue.text);
         save.onclick = translate.onclick;
         const actions = document.createElement('div'); actions.className = 'cue-actions'; actions.append(translate, save);
+        const practice = document.createElement('button'); practice.className = 'cue-translate cue-shadow'; practice.textContent = '跟讀'; practice.setAttribute('aria-label', '練習 ' + format(cue.start) + ' 的完整片段');
+        practice.onclick = () => shadow.prepare(cue.start); actions.append(practice);
         const reveal = document.createElement('button'); reveal.className = 'cue-review'; reveal.hidden = true;
         reveal.onclick = () => { const id = review.key(cue); if (revealed.has(id)) revealed.delete(id); else revealed.add(id); applyReview(); };
         actions.append(reveal);
@@ -382,6 +403,7 @@
       $('chinese-info').textContent = selectedChinese ? `優先採用 Netflix 中文字幕 · ${selectedChinese.label}` : '等待自動取得中文字幕。';
       expectedScroll = Math.min(scroll, Math.max(0, list.scrollHeight - list.clientHeight)); list.scrollTop = expectedScroll;
       updateHighlight(document.querySelector('video')?.currentTime || 0);
+      shadow.refresh();
     }
     function trackOptions() {
       $('transcript-track').replaceChildren();
@@ -412,12 +434,16 @@
       tracks.push(item); if (tracks.length > 6) tracks.shift();
       // Prefer a track matching the subtitle currently on screen; never merge tracks.
       const text = normalize(lastText), now = document.querySelector('video')?.currentTime || 0;
-      if (!selectedTrack || !tracks.includes(selectedTrack) || (autoTrack && item.cues.some(c => normalize(c.text) === text && now >= c.start && now < c.end))) selectedTrack = item;
+      if (!selectedTrack || !tracks.includes(selectedTrack) || (!shadow.active() && autoTrack && item.cues.some(c => normalize(c.text) === text && now >= c.start && now < c.end))) {
+        if (shadow.active()) void shadow.stop();
+        selectedTrack = item;
+      }
       trackOptions(); render();
     }
-    $('transcript-track').onchange = () => { clearSelection(false); autoTrack = false; selectedTrack = tracks.find(t => t.id === $('transcript-track').value); render(); };
+    $('transcript-track').onchange = () => { void shadow.stop(); clearSelection(false); autoTrack = false; selectedTrack = tracks.find(t => t.id === $('transcript-track').value); render(); };
     $('chinese-track').onchange = () => { clearSelection(false); manualChinese = true; selectedChinese = chineseTracks.find(t => t.id === $('chinese-track').value); render(); };
     function reset() {
+      void shadow.stop();
       clearSelection(false); renderPending = false; autoActive = false; pauseGate.reset(); revealed.clear();
       $('auto-caption-status').textContent = ''; $('auto-caption-retry').hidden = true;
       path = location.pathname; tracks = []; history = []; cues = []; selectedTrack = null; observed = null; lastText = ''; lastTime = 0; nativeSeen = new WeakMap();
@@ -444,7 +470,7 @@
       if (path !== location.pathname) reset();
       visible = enabled && /^\/watch\/\d+$/.test(path); show();
       if (autoActive !== visible) { autoActive = visible; emit({ type: 'autoCaptions', path, enabled: visible }); }
-      if (!visible) { pauseGate.reset(); if (revealed.size) { revealed.clear(); applyReview(); } return; }
+      if (!visible) { void shadow.stop(); pauseGate.reset(); if (revealed.size) { revealed.clear(); applyReview(); } return; }
       const video = document.querySelector('video'), now = video?.currentTime || 0;
       if (video !== reviewVideo) {
         reviewVideo?.removeEventListener('seeking', resetReviewPlayback);
@@ -459,7 +485,7 @@
         }
       }
       const normalized = normalize(text);
-      if (autoTrack && normalized && tracks.length > 1) {
+      if (!shadow.active() && autoTrack && normalized && tracks.length > 1) {
         const match = tracks.find(t => t.cues.some(c => normalize(c.text) === normalized && now >= c.start && now < c.end));
         if (match && match !== selectedTrack) { selectedTrack = match; trackOptions(); render(); }
       }
@@ -482,7 +508,7 @@
       // History cue ends grow during playback; keep grouped row timing current too.
       if (!selectedTrack && selectedChinese) for (const cue of cues) if (cue.parts) cue.end = Math.max(...cue.parts.map(part => part.end));
       lastText = normalized; lastTime = now; updateHighlight(now);
-      if (pauseGate.update(cues, reviewTargets, now, !!video && !video.paused && !video.seeking, reviewSettings.enabled && reviewSettings.pause)) {
+      if (pauseGate.update(cues, reviewTargets, now, !!video && !video.paused && !video.seeking, !shadow.active() && reviewSettings.enabled && reviewSettings.pause)) {
         video.pause();
         $('transcript-feedback').textContent = '複習暫停 · 回想這句對話，顯示答案後按播放繼續。';
       }
@@ -495,6 +521,7 @@
       return source?.alignment || alignTranslation(source || { start: time, end: Number.isFinite(end) && end > time ? end : time + .2 }, selectedChinese);
     }
     function getReviewState(time) {
+      if (visible && shadow.active()) return shadow.mask();
       const targets = cues.filter((cue, i) => visible && reviewSettings.enabled && reviewTargets.has(i) && time >= cue.start && time < cue.end);
       const hidden = targets.some(cue => !revealed.has(review.key(cue)));
       return { hideEnglish: hidden && reviewSettings.hideEnglish, hideChinese: hidden && reviewSettings.hideChinese };
@@ -503,6 +530,6 @@
       const cue = cues.find(c => normalize(c.text) === normalize(context) && time >= c.start && time < c.end);
       return cue ? { time: cue.start, cueEnd: cue.end } : {};
     }
-    return { tick, getTranslation, getReviewState, getCueMetadata, hasEnglish: () => !!selectedTrack?.cues.length, open: () => { clearSelection(); collapsed = false; show(); followCurrent(); } };
+    return { tick, getTranslation, getReviewState, getCueMetadata, pausePractice: () => shadow.pause('查詞中，完成後按繼續。'), hasEnglish: () => !!selectedTrack?.cues.length, open: () => { clearSelection(); collapsed = false; show(); followCurrent(); } };
   };
 })();

@@ -12,6 +12,10 @@
 
 下載 ZIP 的使用者請先解壓縮，再載入其中的 `extension` 資料夾。這是本機開發版本，尚未上架 Chrome 線上應用程式商店。
 
+## Antigravity／Copilot 免費雲端翻譯
+
+新增 Google 帳號和 GitHub Copilot Free 帳號的 MCP 串接；模型在雲端執行。請參考 [免費雲端 AI 設定](cloud-ai.md)，安裝 CLI 並親自完成帳號登入。
+
 ## Codex／MCP 翻譯
 
 現在可在「字典／翻譯設定」選擇 **Codex（本機 MCP）**。擴充功能經由本機 MCP 橋接呼叫 Codex App Server；使用現有 Codex 登入，不需另填 OpenAI API key。
@@ -26,6 +30,8 @@ npm ci
 codex login   # 若已登入可略過
 npm run mcp
 ```
+
+啟動後輸入模型編號，或按 Enter 使用 Luna（若帳號可用）。設定 `CODEX_MODEL` 時直接使用該模型，略過選單。非互動啟動不會等待輸入，模型沿用 `CODEX_MODEL` 或 Codex 設定。終端機會列出翻譯進度與耗時；詳見 [終端機使用說明](terminal.md)。
 
 保持服務執行，另開終端機在同一個資料夾執行 `npm run mcp:token`，複製產生的權杖。
 
@@ -46,7 +52,19 @@ npm run mcp
 - 本機 MCP 僅監聽 `127.0.0.1`，需 Bearer 權杖；拒絕一般網站 Origin 和不符的 Host。權杖在 `.local/mcp-token`（僅目前使用者可讀寫），勿放入分享檔案；套件另存於 `chrome.storage.local`，不包含於收藏匯出。
 - 服務不保存字幕檔；翻譯工作與結果在記憶體中保留最多十分鐘。Codex 使用暫存對話，但這不等同於模型服務端零資料保留。
 - 本機服務需保持執行。單次翻譯可能需要數十秒；擴充功能透過短請求輪詢結果。最多同時處理兩筆，佇列含執行中最多八筆。
-- 改模型可在啟動時指定 `CODEX_MODEL`，未指定時使用 Codex 設定。改連接埠可用 `MCP_PORT`，並同步修改套件設定網址。`CODEX_BIN` 可指定 Codex 執行檔。
+- 改模型可在啟動時指定 `CODEX_MODEL`，未指定時使用 Codex 設定。字幕翻譯預設使用 `low` 推理，可用 `CODEX_REASONING_EFFORT=medium npm run mcp` 調整；所選等級需受目前模型支援。此設定只套用於本機翻譯服務，不更動全域 Codex 設定。改連接埠可用 `MCP_PORT`，並同步修改套件設定網址。`CODEX_BIN` 可指定 Codex 執行檔。
+- 翻譯服務會重用已初始化的 Codex 程序，每句建立獨立暫存對話，完成後取消訂閱以釋放對話資源。斷線後下一個請求會重新連線；失敗的翻譯不會自動重送。只產生介面使用的譯文，命令列原型仍保留單字及文法說明。
+
+### 套用翻譯速度優化
+
+在原本執行服務的終端機按 Ctrl+C，再執行：
+
+```sh
+cd /Users/bob/Documents/workspaces/LearnEnglish
+npm run mcp
+```
+
+這會套用程序重用、精簡輸出與 `low` 推理。Chrome 在 `chrome://extensions` 重新載入既有擴充功能，再重新整理 Netflix，可套用 250ms 的結果輪詢間隔。既有權杖可繼續使用。詳見 [效能驗證](performance.md)。
 
 ### MCP 相容範圍
 
@@ -61,4 +79,3 @@ npm run mcp
 同一 `requestId` 與相同文字在工作保留期間不會重複呼叫模型。其他支援相同 HTTP 傳輸的 MCP 客戶端也能使用這些工具；已用官方 SDK 客戶端驗證。App Server 使用另一套 JSON-RPC 協定，由 `bridge/` 負責轉接。**Codex App Server 仍為實驗性功能，官方不支援正式生產用途。**
 
 程式位置：`extension/mcp.js` 是套件 MCP 客戶端，`extension/translation.js` 管理來源選擇與快取，`bridge/server.mjs` 提供 MCP 工具，`providers/codex/codex.mjs` 連接 App Server。
-

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>隱私權政策 · 字幕口袋</title>
+<style>body{font:16px/1.9 system-ui,sans-serif;background:#f7f8f2;color:#233d34;margin:0}main{max-width:800px;margin:auto;padding:48px 24px}h1{font-size:34px}h2{font-size:21px;margin-top:36px}a{color:#276143}li{margin:8px 0}code{overflow-wrap:anywhere}</style></head>
+<body><main><p>SUBTITLE POCKET</p><h1>字幕口袋隱私權政策</h1><p>更新日期：2026 年 9 月 15 日 · 適用版本：0.10.0</p>
+<p>字幕口袋協助使用者透過 Netflix 字幕學習英文。本政策說明擴充功能及選用的本機 AI 橋接服務如何處理資料。</p>
+<h2>1. 在你的裝置上處理的資料</h2>
+<p>擴充功能在 Netflix 頁面讀取字幕、影片名稱、播放時間與影片網址，以顯示逐字稿、查詢詞義、收藏及複習。收藏包含選取文字、翻譯、原句、中英文字幕資訊、影片名稱、Netflix 影片網址、時間點、收藏時間及選用的 AI 評分。</p>
+<p>收藏、介面偏好、複習與跟讀設定、翻譯快取、Google 查詢用量計數、使用者輸入的 Google API 金鑰與本機 MCP 權杖，儲存在目前 Chrome 使用者設定檔的本機儲存空間。擴充功能沒有開發者營運的收藏同步伺服器。</p>
+<p>使用者主動按下單字朗讀時，所選英文交由本機系統語音引擎播放；不選用標示為遠端或由其他擴充功能提供的語音，不送至翻譯或雲端 AI 服務。朗讀不需要麥克風存取。</p>
+<h2>2. 資料何時傳送到第三方</h2>
+<ul><li><strong>離線字典：</strong>ECDICT 查詞在裝置上執行，不為查詞傳送文字到外部服務。Netflix 中文字幕與逐字稿由目前的 Netflix 播放頁面取得。</li>
+<li><strong>Google Cloud Translation：</strong>設定金鑰後，當需要線上翻譯或主動要求線上查詢時，將所選英文與使用者的 API 金鑰送至 Google Translation API。Google 同時會收到建立網路連線所需的資訊，例如 IP 位址。</li>
+<li><strong>AI 翻譯：</strong>使用者設定 Codex、Antigravity 或 GitHub Copilot 後，選取的英文經 <code>http://127.0.0.1</code> 本機橋接服務送至選用的雲端 AI 服務。單字翻譯及評分會附上部分原句。</li>
+<li><strong>收藏庫 AI 分析：</strong>由使用者按下分析按鈕啟動；傳送單字、中文釋義、部分原句與用於配對結果的收藏識別碼至選用的 AI。分析可能涵蓋整個收藏庫中待評分的單字。</li>
+<li>Google 與 AI 翻譯請求不附上影片名稱或 Netflix 影片網址。MCP 權杖只用於本機橋接驗證；雲端 AI 登入由使用者另外安裝的 CLI 處理。</li></ul>
+<p>第三方服務依其各自政策與帳號設定處理收到的資料；本擴充功能無法控制第三方的保留期限。使用前請查閱選用服務的隱私說明。雲端 AI 翻譯需要網路，本機橋接不代表模型在本機執行。</p>
+<h2>3. 使用目的與限制</h2>
+<p>資料僅用於字幕顯示、翻譯、收藏、搜尋、匯出、複習與使用者要求的 AI 學習分析。擴充功能不包含廣告、行銷追蹤或開發者分析追蹤程式；不出售使用者資料，不將資料用於個人化廣告、信用評估或貸款用途。</p>
+<h2>4. 保留、匯出與刪除</h2>
+<p>可在收藏庫逐筆刪除收藏，於翻譯設定清除翻譯快取、移除 Google 金鑰或 MCP 權杖。移除擴充功能會移除該安裝的 Chrome 擴充功能本機資料。匯出的 CSV／JSON 是你自行保管的檔案，可能包含原句、影片名稱、影片網址與 AI 評分；匯出檔不包含 Google 金鑰或 MCP 權杖。</p>
+<p>另外安裝的本機橋接、CLI、登入資料、終端機紀錄與已匯出的檔案，不會隨擴充功能解除安裝自動刪除。本機橋接終端機可能顯示原文與譯文摘要；可使用 <code>MCP_LOG_TEXT=0</code> 停止顯示文字摘要。第三方已收到的資料，須依該服務提供的管理方式處理。</p>
+<h2>5. 聯絡與政策更新</h2>
+<p>隱私問題請透過 Chrome 線上應用程式商店本項目列出的開發者聯絡或支援管道提出。資料處理方式變更時，會更新本政策及上方日期。</p>
+<p>字幕口袋是獨立開發的學習工具，與 Netflix 無隸屬、合作或背書關係。</p>
+</main></body></html>

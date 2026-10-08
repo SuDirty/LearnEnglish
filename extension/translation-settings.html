@@ -3,15 +3,15 @@
 main{max-width:700px!important}label{display:block;margin:20px 0 8px;font-weight:600}input,select{display:block;box-sizing:border-box;width:100%;padding:12px;margin-top:8px;border:1px solid #a6b9aa;border-radius:8px;background:white;font:inherit}button{margin:6px 8px 6px 0}.setting-note{font-size:14px;line-height:1.8;color:#506754}.setting-actions{display:flex;flex-wrap:wrap}#status{min-height:24px;white-space:pre-wrap}#usage,.setup{padding:18px;background:#e4eddf;border-radius:12px;line-height:1.9}#usage{white-space:pre-line}a{color:#276143}code{overflow-wrap:anywhere}button:disabled{opacity:.6}[hidden]{display:none!important}
 </style></head><body class="library"><main><p class="eyebrow">SUBTITLE POCKET</p><h1>字典與翻譯設定</h1><p>單字／片語優先查離線 ECDICT；整句優先用 Netflix 中文字幕。查不到時使用你選擇的翻譯服務。</p>
 <form id="settings">
-<label for="provider">翻譯服務<select id="provider"><option value="google">Google Cloud Translation</option><option value="mcp">Codex（本機 MCP）</option></select></label>
+<label for="provider">翻譯服務<select id="provider"><option value="antigravity">Antigravity（雲端・免費帳號／MCP）</option><option value="copilot">GitHub Copilot（雲端・Free／MCP）</option><option value="mcp">Codex（雲端・既有帳號／MCP）</option><option value="google">Google Cloud Translation（API 計費）</option></select></label>
 <section id="mcp-settings" hidden>
-<div class="setup"><strong>使用已登入的 Codex 翻譯</strong><ol><li>在本專案資料夾開啟終端機，第一次執行 <code>npm install</code>。</li><li>確認已執行 <code>codex login</code>，接著執行 <code>npm run mcp</code>，保持終端機開啟。</li><li>另開終端機執行 <code>npm run mcp:token</code>，把權杖貼到下方。</li><li>按「儲存並測試連線」，允許 Chrome 存取本機服務。</li></ol></div>
+<div class="setup"><strong>雲端 AI，透過 MCP 翻譯</strong><ol><li>在專案資料夾依 <code>docs/cloud-ai.md</code> 安裝官方 Antigravity／Copilot CLI。</li><li>Antigravity：執行 <code>npm run ai:login:antigravity</code>，使用 Google 帳號登入，再執行 <code>npm run mcp:antigravity</code>。</li><li>Copilot：使用 Copilot Free 帳號執行 <code>npm run ai:login:copilot</code>，再執行 <code>npm run mcp:copilot</code>。</li><li>Codex 沿用原有 <code>npm run mcp</code>。保持所選服務的終端機開啟。</li><li>另開終端機執行 <code>npm run mcp:token</code>，貼到下方並按「儲存並測試連線」。</li></ol></div>
 <label for="mcp-endpoint">本機服務網址<input id="mcp-endpoint" type="url" value="http://127.0.0.1:8765/mcp" spellcheck="false"></label>
 <label for="mcp-token">本機連線權杖<input id="mcp-token" type="password" autocomplete="off" spellcheck="false" placeholder="貼上本機服務產生的權杖"></label>
 <p id="mcp-state" class="setting-note"></p>
 <div class="setting-actions"><button id="test-mcp" type="button">儲存並測試連線</button><button id="clear-mcp-token" type="button">移除權杖</button></div>
-<p class="setting-note">選取的英文會經由本機服務送到 Codex 翻譯，使用現有 Codex 登入與用量額度。服務需保持執行；首次翻譯可能需要數十秒。連線失敗會顯示錯誤，不會自動切換到 Google。App Server 目前屬實驗性功能。</p>
-<p id="mcp-cache-state" class="setting-note"></p><button id="clear-mcp-cache" type="button">清除 Codex 翻譯快取</button>
+<p class="setting-note">英文會送到所選 AI 的雲端服務，電腦只執行 MCP 橋接，不下載本機模型。Antigravity 使用 Google 帳號額度；Copilot 請使用 Free 方案。免費額度與可用模型依帳號為準，錯誤時不會切換到付費 API。首次翻譯可能需要數十秒。測試連線只檢查 MCP 與 CLI，實際翻譯才會驗證雲端額度。</p>
+<p id="mcp-cache-state" class="setting-note"></p><button id="clear-mcp-cache" type="button">清除 AI 翻譯快取</button>
 </section>
 <section id="google-settings">
 <label for="api-key">Google Cloud API 金鑰<input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="貼上你的 API 金鑰"></label><p id="key-state" class="setting-note"></p>
@@ -25,6 +25,6 @@ main{max-width:700px!important}label{display:block;margin:20px 0 8px;font-weight
 <button class="primary" type="submit">儲存設定</button>
 </form>
 <p id="status" role="status" aria-live="polite"></p>
-<p class="setting-note">線上翻譯只送出所選英文，不送原句、影片名稱或網址。收藏與翻譯快取保存在本機。Google 金鑰和 MCP 權杖不會放進收藏匯出檔。</p>
+<p class="setting-note">Google 翻譯會送出所選英文；AI 單字翻譯會附上部分原句，收藏庫 AI 分析會送出單字、中文釋義、部分原句及用於配對結果的收藏識別碼。不傳送影片名稱或網址給翻譯服務。收藏與翻譯快取保存在本機；Google 金鑰和 MCP 權杖不會放進收藏匯出檔。<a href="privacy.html" target="_blank">隱私權政策 ↗</a></p>
 <p class="setting-note">離線字典來源：<a href="https://github.com/skywind3000/ECDICT" target="_blank" rel="noreferrer">ECDICT</a>，中文以 OpenCC 轉為繁體。字典列出一般詞義，可能包含過時或不符劇情的解釋；可按「改用所選翻譯服務」比較。<a href="licenses/ECDICT.txt">授權</a></p>
 </main><script type="module" src="translation-settings.js"></script></body></html>

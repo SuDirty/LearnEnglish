@@ -1,11 +1,18 @@
 {
   "manifest_version": 3,
   "name": "字幕口袋 · Netflix 英文學習",
-  "version": "0.9.2",
+  "version": "0.10.0",
   "description": "點選 Netflix 英文字幕，翻譯成繁體中文，收藏單字、片語與句子；逐字稿可停靠四邊或半透明浮動。",
   "minimum_chrome_version": "120",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "permissions": [
-    "storage"
+    "storage",
+    "tts"
   ],
   "host_permissions": [
     "https://translation.googleapis.com/*"
@@ -37,13 +44,20 @@
         "layout.js",
         "transcript.js",
         "review.js",
+        "shadowing.js",
+        "shadowing-ui.js",
         "transcript-ui.js",
+        "speech-ui.js",
         "content.js"
       ],
       "run_at": "document_idle"
     }
   ],
   "action": {
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    },
     "default_title": "字幕口袋",
     "default_popup": "popup.html"
   },

@@ -27,7 +27,7 @@ test('official MCP SDK client can discover and invoke the bridge tools', async t
   const client = new Client({ name: 'compatibility-test', version: '1.0.0' });
   t.after(() => client.close());
   await client.connect(new StreamableHTTPClientTransport(new URL(server.endpoint), { requestInit: { headers: { Authorization: `Bearer ${token}` } } }));
-  assert.deepEqual((await client.listTools()).tools.map(tool => tool.name).sort(), ['translate', 'translation_health', 'translation_result']);
+  assert.deepEqual((await client.listTools()).tools.map(tool => tool.name).sort(), ['analyze_vocabulary', 'translate', 'translate_word', 'translation_health', 'translation_result']);
   const job = await client.callTool({ name: 'translate', arguments: { text: 'Hello', requestId: randomUUID() } });
   assert.equal(typeof job.structuredContent.jobId, 'string');
   const done = await client.callTool({ name: 'translation_result', arguments: { jobId: job.structuredContent.jobId } });

@@ -7,21 +7,40 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod';
 import { TranslationJobs } from './jobs.mjs';
 import { createBackend } from './backend.mjs';
-import { getToken, tokenPath } from './token.mjs';
 
 const result = value => ({ content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value });
 const toolError = error => ({ isError: true, content: [{ type: 'text', text: error.message || '翻譯服務發生錯誤。' }] });
 
 function createTools(backend, jobs) {
-  const mcp = new McpServer({ name: 'subtitle-pocket-codex', version: '0.9.2' });
+  const mcp = new McpServer({ name: 'subtitle-pocket-ai', version: '0.10.0' });
   mcp.registerTool('translation_health', {
-    description: 'Check the local Codex App Server connection and login without sending text to a model.',
+    description: 'Check the selected AI bridge and available login metadata without sending text to a model. verified=false means cloud authentication and quota have not been tested.',
     inputSchema: {},
   }, async () => { try { return result(await backend.status()); } catch (error) { return toolError(error); } });
   mcp.registerTool('translate', {
-    description: 'Translate selected English into Traditional Chinese with Codex. Returns a jobId immediately; poll translation_result until completed or failed.',
+    description: 'Translate selected English into Traditional Chinese with the selected cloud AI. Returns a jobId immediately; poll translation_result until completed or failed.',
     inputSchema: { text: z.string().trim().min(1).max(2000), requestId: z.string().uuid() },
   }, async ({ text, requestId }) => { try { return result(jobs.start(text, requestId)); } catch (error) { return toolError(error); } });
+  mcp.registerTool('translate_word', {
+    description: 'Translate an English word in context and score its frequency, usefulness and tags in one model request. Poll translation_result.',
+    inputSchema: { text: z.string().trim().min(1).max(2000), context: z.string().max(500), requestId: z.string().uuid() },
+  }, async ({ text, context, requestId }) => {
+    try {
+      if (typeof backend.translateWord !== 'function') throw new Error('此服務尚未支援同步評分，請更新並重新啟動 MCP。');
+      return result(jobs.start(JSON.stringify({ text, context }), requestId, 'word'));
+    } catch (error) { return toolError(error); }
+  });
+  mcp.registerTool('analyze_vocabulary', {
+    description: 'Rate 1–10 saved words for everyday frequency and usefulness. Poll translation_result for the scores.',
+    inputSchema: { entries: z.array(z.object({ id: z.string().min(1).max(100), text: z.string().trim().min(1).max(200),
+      translation: z.string().max(300), context: z.string().max(500) })).min(1).max(10), requestId: z.string().uuid() },
+  }, async ({ entries, requestId }) => {
+    try {
+      if (typeof backend.analyzeVocabulary !== 'function') throw new Error('此 AI 服務尚未支援收藏評分，請更新並重新啟動 MCP。');
+      if (new Set(entries.map(entry => entry.id)).size !== entries.length) throw new Error('評分單字識別碼重複。');
+      return result(jobs.start(JSON.stringify(entries), requestId, 'vocabulary'));
+    } catch (error) { return toolError(error); }
+  });
   mcp.registerTool('translation_result', {
     description: 'Read the status and translation of a job returned by translate. Results expire after ten minutes.',
     inputSchema: { jobId: z.string().uuid() },
@@ -29,12 +48,13 @@ function createTools(backend, jobs) {
   return mcp;
 }
 
-export async function startServer({ token, port = 8765, backend = createBackend() } = {}) {
+export async function startServer({ token, port = 8765, backend = createBackend(), onEvent = () => {} } = {}) {
   if (!token || token.length < 32) throw new Error('MCP token must contain at least 32 characters.');
-  const jobs = new TranslationJobs(backend);
+  const jobs = new TranslationJobs(backend, { onEvent });
   const transports = new Set();
   const http = createServer(async (req, res) => {
     const reply = (status, message) => {
+      try { onEvent({ type: 'request.rejected', status, message }); } catch {}
       res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify({ error: message }));
     };
@@ -94,10 +114,7 @@ export async function startServer({ token, port = 8765, backend = createBackend(
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    const port = Number(process.env.MCP_PORT || 8765);
-    if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('MCP_PORT 需介於 1024～65535。');
-    const server = await startServer({ token: await getToken(), port });
-    console.log(`字幕口袋 MCP 已啟動：${server.endpoint}\n權杖檔案：${tokenPath}\n執行 npm run mcp:token 取得權杖，貼到套件翻譯設定。`);
-    for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await server.close(); process.exit(0); });
+    const { runTerminal } = await import('./terminal.mjs');
+    await runTerminal({ startServer });
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

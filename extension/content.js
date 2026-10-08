@@ -23,12 +23,15 @@
     .actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{border-radius:10px;padding:10px 14px;background:#293f36;font-size:13px}.actions .primary{background:#b7efcd;color:#142d22;font-weight:650}button:disabled{opacity:.5;cursor:default}
     #note{color:#8fa99c;font-size:11px;margin:16px 0 0}#feedback{color:#b7efcd;font-size:12px;min-height:18px;margin-top:8px}
     .save-kind{display:flex;align-items:center;gap:10px;margin:12px 0;color:#b4cebf;font-size:12px}#save-kind{background:#293f36;color:#ecf4ee;border:1px solid #567564;border-radius:6px;padding:6px;font:inherit}
+    #learning-score{margin:12px 0;padding:12px;border:1px solid #426451;border-radius:9px;background:#243e30;font-size:12px;line-height:1.7}#learning-score p{margin:4px 0}#learning-score-summary{font-weight:650;color:#d3f0b6}#learning-score-tags{color:#b5d3c2}
+    .speech-controls{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}.speech-controls button{background:#293f36;border-radius:8px;padding:6px 10px;font-size:12px}.speech-status{flex-basis:100%;font-size:12px;color:#b7efcd;overflow-wrap:anywhere}.speech-status:empty{display:none}
   </style>
   <div id="subtitles" hidden><div id="words"></div><button id="sentence">翻譯整句 ↗</button></div>
   <button id="status" hidden title="開啟收藏">字幕口袋 · 正在取得英文字幕</button>
   <section id="card" role="dialog" aria-label="字幕翻譯" hidden>
     <button id="close" aria-label="關閉翻譯">×</button><div class="eyebrow">SUBTITLE POCKET · 字幕口袋</div>
-    <h2 id="source"></h2><p id="dictionary-meta" style="font-size:12px;color:#b5d3c2" hidden></p><div id="translation" role="status" aria-live="polite"></div><p id="context"></p><p id="chinese-context" hidden></p>
+    <h2 id="source"></h2><div id="speech" hidden></div><p id="dictionary-meta" style="font-size:12px;color:#b5d3c2" hidden></p><div id="translation" role="status" aria-live="polite"></div><p id="context"></p><p id="chinese-context" hidden></p>
+    <section id="learning-score" aria-label="AI 單字評分" hidden><p id="learning-score-summary"></p><p id="learning-score-tags"></p><p id="learning-score-reason"></p></section>
     <label class="save-kind">收藏類型<select id="save-kind"><option value="word">單字</option><option value="phrase">片語</option><option value="sentence">句子／段落</option></select></label>
     <div class="actions"><button id="save" class="primary" disabled>＋ 收藏</button><button id="whole">翻譯整句</button><button id="retry" hidden>重新翻譯</button><button id="online-translate" hidden>改用所選翻譯服務</button><button id="translation-settings">翻譯設定</button><button id="library">我的收藏 ↗</button></div>
     <div id="feedback" role="status"></div><p id="note">離線字典優先；線上查詢使用所選翻譯服務。收藏保存在本機。關閉後請按播放繼續。</p>
@@ -58,9 +61,13 @@
     originals = []; originalStyle.clear();
     $('subtitles').hidden = true; current = ''; currentMask = '';
   }
-  function close() { requestId++; selected = null; $('card').hidden = true; }
+  function close() { globalThis.SubtitlePocketSpeech.reset(); requestId++; selected = null; $('card').hidden = true; }
   const layout = globalThis.SubtitlePocketLayout(host);
   const transcript = globalThis.SubtitlePocketTranscript.createPanel(root, lookup, close, layout);
+  globalThis.SubtitlePocketSpeech.mount($('speech'), () => selected?.text, () => {
+    void transcript.pausePractice();
+    document.querySelector('video')?.pause();
+  });
   function mount() {
     const parent = document.fullscreenElement || document.documentElement;
     if (host.parentElement !== parent) parent.append(host);
@@ -119,6 +126,9 @@
     return String(value).replace(/&(?:#\d+|#x[\da-f]+|[a-z]+);/gi, entity => { textarea.innerHTML = entity; return textarea.value; });
   }
   async function lookup(text, kind, context, metadata, forceOnline = false) {
+    globalThis.SubtitlePocketSpeech.reset();
+    $('speech').hidden = kind !== 'word';
+    void transcript.pausePractice();
     transcript.open();
     const video = document.querySelector('video');
     if (pauseOnLookup && video && !video.paused) video.pause();
@@ -126,7 +136,7 @@
     selected = { text, kind, context, forceOnline, title: document.querySelector('[data-uia="video-title"]')?.textContent || document.title.replace(/\s*[-|]\s*Netflix.*$/, ''), url: location.href, time: video?.currentTime || 0, ...transcript.getCueMetadata(context, video?.currentTime || 0), ...metadata };
     $('card').hidden = false; $('source').textContent = text; $('context').textContent = context;
     $('translation').textContent = '翻譯中…'; $('save').disabled = true; $('save').textContent = '＋ 收藏';
-    $('save-kind').value = kind; $('online-translate').hidden = true; $('dictionary-meta').hidden = true;
+    $('save-kind').value = kind; $('online-translate').hidden = true; $('dictionary-meta').hidden = true; $('learning-score').hidden = true;
     const completeContext = globalThis.SubtitlePocketTranscript.normalize(text) === globalThis.SubtitlePocketTranscript.normalize(context);
     $('feedback').textContent = ''; $('retry').hidden = true; $('whole').hidden = completeContext;
     const chinese = transcript.getTranslation(context, selected.time, selected.cueEnd);
@@ -139,17 +149,25 @@
       ? '來源：Netflix 中文字幕（' + (chinese.language || '未標示語系') + '）· 依時間對齊，未呼叫外部翻譯服務。'
       : '優先查詢離線字典；無詞條時使用所選翻譯服務。';
     try {
-      const result = fromSubtitle ? { translation: chinese.text } : await send({ type: 'translate', text, kind, forceOnline });
+      const result = fromSubtitle ? { translation: chinese.text } : await send({ type: 'translate', text, kind, forceOnline, context });
       if (token !== requestId) return;
       selected.translation = result.provider === 'Google Cloud Translation' ? decodeEntities(result.translation) : result.translation;
       selected.translationSource = fromSubtitle ? 'Netflix 中文字幕' : result.provider;
+      if (kind === 'word' && result.learningScore) {
+        const score = result.learningScore;
+        selected.learningScore = score;
+        $('learning-score-summary').textContent = `AI 估計 ${score.score} / 100 · 常用度 ${score.frequency} · 實用性 ${score.usefulness}`;
+        $('learning-score-tags').textContent = score.tags.join(' · ');
+        $('learning-score-reason').textContent = score.reason;
+        $('learning-score').hidden = false;
+      }
       selected.dictionaryHeadword = result.headword || ''; selected.phonetic = result.phonetic || '';
       $('online-translate').hidden = result.provider !== 'ECDICT';
       $('dictionary-meta').hidden = result.provider !== 'ECDICT';
       $('dictionary-meta').textContent = [result.headword, result.phonetic && '/' + result.phonetic + '/'].filter(Boolean).join(' · ');
       if (!fromSubtitle) $('note').textContent = result.provider === 'ECDICT'
         ? '來源：ECDICT 離線英中字典（繁體轉換）· 未送出網路請求。以下為一般詞義，請搭配原句判斷。'
-        : '來源：' + result.provider + (result.cached ? '（本機快取）' : '') + ' · 只送出所選文字；中文字幕供上下文參考。';
+        : '來源：' + result.provider + (result.cached ? '（本機快取）' : '') + (result.learningScore ? ' · 已送出單字與部分原句，同步取得譯文、評分和標籤。' : ' · 只送出所選文字；中文字幕供上下文參考。');
       $('translation').textContent = selected.translation; $('save').disabled = false;
     } catch (error) {
       if (token !== requestId) return;
@@ -169,7 +187,7 @@
     try {
       const result = await send({ type: 'save', entry: selected });
       if (token !== requestId) return;
-      $('save').textContent = '✓ 已收藏'; $('feedback').textContent = result.updated ? '已更新收藏譯文。' : result.duplicate ? '這筆內容已經在收藏裡。' : '已存入你的字幕口袋。';
+      $('save').textContent = '✓ 已收藏'; $('feedback').textContent = result.updated ? '已更新收藏內容。' : result.duplicate ? '這筆內容已經在收藏裡。' : '已存入你的字幕口袋。';
     } catch (error) { if (token === requestId) { $('feedback').textContent = error.message; $('save').disabled = false; } }
   };
   const openLibrary = () => send({ type: 'openLibrary' }).catch(error => { $('status').textContent = error.message; });
